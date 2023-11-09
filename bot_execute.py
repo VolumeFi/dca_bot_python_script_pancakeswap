@@ -48,11 +48,27 @@ SUCCESS = 1  # All success withdrawn type.
 EXPIRED = 2  # For Limit order, Stop loss bot type.
 REMAINING = 3  # For DCA bot type.
 
+CON: Connection = sqlite3.connect(DB_PATH)
+
+CON.execute("PRAGMA busy_timeout = 5000")
+CON.execute("PRAGMA journal_mode = WAL")
+CON.isolation_level = None;
+
 price = {}
 
 paloma_lcd_client: AsyncLCDClient = None
 paloma_wallet: AsyncWallet = None
 
+def execute_with_retry(query, max_attempts=5, delay=1):
+    for attempt in range(max_attempts):
+        try:
+            CON.execute(query)
+            return
+        except sqlite3.Error as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            time.sleep(delay)
+
+    raise Exception(f"Failed to execute query after {max_attempts} attempts")
 
 async def dca_bot(network):
     global price, paloma_lcd_client, paloma_wallet
@@ -69,7 +85,8 @@ async def dca_bot(network):
     NETWORK_NAME: str = network['NETWORK_NAME']
     COINGECKO_CHAIN_ID: str = network['COINGECKO_CHAIN_ID']
     COINGECKO_COIN_ID: str = network['COINGECKO_COIN_ID']
-    CON: Connection = sqlite3.connect(DB_PATH)
+
+
     if paloma_lcd_client is None or paloma_wallet is None:
         paloma_lcd_client = AsyncLCDClient(url=PALOMA_LCD, chain_id=PALOMA_CHAIN_ID)
         paloma_lcd_client.gas_prices = "0.01ugrain"
@@ -81,7 +98,7 @@ async def dca_bot(network):
 
     DEX: str = network['DEX']
 
-    res = CON.execute(
+    res = execute_with_retry(
         "SELECT * FROM fetched_blocks WHERE ID = (SELECT MAX(ID) FROM fetched_blocks WHERE network_name = ? AND dex = ? AND bot = ? AND contract_instance = ?);",
         (NETWORK_NAME, DEX, BOT, dca_bot_address)
     )
@@ -89,10 +106,10 @@ async def dca_bot(network):
     result: tuple = res.fetchone()
     if result is None:
         data = (FROM_BLOCK - 1, NETWORK_NAME, DEX, BOT, dca_bot_address)
-        CON.execute(
+        execute_with_retry(
             "INSERT INTO fetched_blocks (block_number, network_name, dex, bot, contract_instance) VALUES (?, ?, ?, ?, ?);", data
         )
-        CON.commit()
+
         from_block = int(FROM_BLOCK)
     else:
         incremented_block = int(result[1]) + 1
@@ -164,7 +181,7 @@ async def dca_bot(network):
             deposit_id: int = int(log.args.deposit_id)
             remaining_counts: int = int(log.args.remaining_counts)
             block_number: int = int(log.blockNumber)
-            cursor = CON.execute("SELECT token0 FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", (deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address))
+            cursor = execute_with_retry("SELECT token0 FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", (deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address))
             result = cursor.fetchone()
             token0 = str(result[0])
             if token0 not in price.keys():
@@ -214,7 +231,7 @@ async def dca_bot(network):
         for log in canceled_logs:
             deposit_id: int = int(log.args.deposit_id)
             block_number: int = int(log.blockNumber)
-            cursor = CON.execute("SELECT token0 FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", (deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address))
+            cursor = execute_with_retry("SELECT token0 FROM deposits WHERE deposit_id = ? AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", (deposit_id, NETWORK_NAME, DEX, BOT, dca_bot_address))
             result = cursor.fetchone()
             token0 = str(result[0])
             if token0 not in price.keys():
@@ -247,14 +264,10 @@ async def dca_bot(network):
     batch_sql.append(sql)
 
     for query in batch_sql:
-        CON.execute(query)
-        CON.commit()
-
-    CON.execute("PRAGMA busy_timeout = 5000")
-    CON.execute("PRAGMA journal_mode = WAL")
+        execute_with_retry(query)
 
     data: tuple = (NETWORK_NAME, DEX, BOT, dca_bot_address)
-    res = CON.execute("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
+    res = execute_with_retry("SELECT deposit_id, number_trades, interval, starting_time, remaining_counts, depositor FROM deposits WHERE remaining_counts > 0 AND network_name = ? AND dex_name = ? AND bot = ? AND contract = ?;", data)
     results = res.fetchall()
     current_time: int = int(time.time())
     deposit_ids = []
@@ -313,7 +326,7 @@ async def dca_bot(network):
 
 async def getBot(deposit_id, dca_bot_address):
     CON: Connection = sqlite3.connect(DB_PATH)
-    res = CON.execute(
+    res = execute_with_retry(
         "SELECT depositor, token0 FROM deposits WHERE deposit_id = ? AND contract = ?;",
         (deposit_id, dca_bot_address))
     result = res.fetchone()
