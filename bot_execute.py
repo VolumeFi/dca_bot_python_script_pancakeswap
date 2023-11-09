@@ -52,7 +52,7 @@ CON: Connection = sqlite3.connect(DB_PATH)
 
 CON.execute("PRAGMA busy_timeout = 5000")
 CON.execute("PRAGMA journal_mode = WAL")
-CON.isolation_level = None;
+CON.isolation_level = None
 
 price = {}
 
