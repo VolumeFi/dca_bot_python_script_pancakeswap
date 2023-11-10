@@ -59,11 +59,11 @@ price = {}
 paloma_lcd_client: AsyncLCDClient = None
 paloma_wallet: AsyncWallet = None
 
-def execute_with_retry(query, max_attempts=5, delay=1):
+def execute_with_retry(query, params=(), max_attempts=5, delay=1):
     for attempt in range(max_attempts):
         try:
-            CON.execute(query)
-            return
+            cursor = CON.execute(query, params)
+            return cursor
         except sqlite3.Error as e:
             print(f"Attempt {attempt + 1} failed with error: {e}")
             time.sleep(delay)
