@@ -66,6 +66,7 @@ async def dca_bot(network):
     dca_bot_address: str = network['ADDRESS']
     dca_bot_abi: str = network['ABI']
     FROM_BLOCK: int = int(network['FROM_BLOCK'])
+    BLOCK_DELAY: int = int(network['BLOCK_DELAY'])
     DEX: str = network['DEX']
     NETWORK_NAME: str = network['NETWORK_NAME']
     COINGECKO_CHAIN_ID: str = network['COINGECKO_CHAIN_ID']
@@ -99,7 +100,7 @@ async def dca_bot(network):
         incremented_block = int(result[1]) + 1
         from_block = int(FROM_BLOCK) if incremented_block < int(FROM_BLOCK) else incremented_block
 
-    BLOCK_NUMBER: int = int(w3.eth.get_block_number())
+    BLOCK_NUMBER: int = int(w3.eth.get_block_number()) - BLOCK_DELAY
     dca_sc: Contract = w3.eth.contract(address=dca_bot_address, abi=dca_bot_abi)
     i: int = from_block
     batch_sql = []
@@ -366,6 +367,7 @@ async def getBotName(tokenAddress):
 async def handle(request):
     return web.Response(text="true")
 
+
 async def web_server():
     app = web.Application()
     app.router.add_get('/', handle)
@@ -374,13 +376,15 @@ async def web_server():
     site = web.TCPSite(runner, 'localhost', 8080)
     await site.start()
 
+
 async def main():
-    global price
+
     # Load JSON
     with open("networks.json") as f:
         networks = json.load(f)
 
     async def worker():
+        global price
         while True:
             price = {}
             try:
