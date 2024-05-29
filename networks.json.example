@@ -1,0 +1,18 @@
+[
+  {
+    "NODE": "https://",
+    "ADDRESS": "0x",
+    "ABI": "[{}]",
+    "JOB_ID": "",
+    "CHAIN_TYPE": "evm",
+    "CHAIN_REFERENCE_ID": "eth-main",
+    "COINGECKO_CHAIN_ID": "ethereum",
+    "COINGECKO_COIN_ID": "ethereum",
+    "NETWORK_NAME": "ETH",
+    "WETH": "0x",
+    "BLOCK_DELAY": 0,
+    "FROM_BLOCK": 0,
+    "CW": "paloma1",
+    "DEX": "curve"
+  }
+]
